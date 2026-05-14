@@ -1,73 +1,1179 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LogiTrack | Driver Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .glass-morphism {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .status-pulse {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.4; }
-            100% { opacity: 1; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FleetMDM — Device & Fleet Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.33.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="style.css" >
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1967D2;--primary-d:#1558B0;--primary-l:#E8F0FE;
+  --success:#34A853;--success-l:#E6F4EA;
+  --warn:#F9AB00;--warn-l:#FEF7E0;
+  --danger:#EA4335;--danger-l:#FCE8E6;
+  --info:#4285F4;--info-l:#E8F0FE;
+  --purple:#9334EA;--purple-l:#F3E8FD;
+  --teal:#0F766E;--teal-l:#CCFBF1;
+  --bg:#F1F3F4;--surface:#fff;--surface2:#F8F9FA;
+  --t1:#202124;--t2:#5F6368;--t3:#9AA0A6;
+  --border:#DADCE0;--border2:#E8EAED;
+  --shadow:0 1px 3px rgba(60,64,67,.15),0 1px 2px rgba(60,64,67,.25);
+  --shadow-lg:0 4px 8px rgba(60,64,67,.12),0 2px 4px rgba(60,64,67,.2);
+  --r:8px;--rl:12px;
+  font-family:'DM Sans','Google Sans',Roboto,sans-serif;
+}
+html,body{height:100%;overflow:hidden;color:var(--t1);background:var(--bg)}
+
+/* ── AUTH ─────────────────────────────────── */
+#auth{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#E8F0FE 0%,#F1F3F4 55%,#E6F4EA 100%)}
+.auth-card{background:var(--surface);border-radius:var(--rl);padding:40px;width:100%;max-width:420px;box-shadow:var(--shadow-lg)}
+.auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:30px}
+.brand-icon{width:42px;height:42px;border-radius:11px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0}
+.brand-name{font-size:22px;font-weight:600;color:var(--t1)}.brand-name span{color:var(--primary)}
+.auth-heading{font-size:24px;font-weight:500;margin-bottom:4px}
+.auth-sub{font-size:13px;color:var(--t2);margin-bottom:26px}
+.fg{margin-bottom:16px}.fg label{display:block;font-size:12px;font-weight:600;color:var(--t2);margin-bottom:5px;letter-spacing:.3px;text-transform:uppercase}
+.fg input{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:14px;color:var(--t1);background:var(--surface);outline:none;transition:.2s}
+.fg input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(25,103,210,.1)}
+.auth-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.auth-remember{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t2);cursor:pointer}
+.auth-forget{font-size:13px;color:var(--primary);cursor:pointer}
+.btn-login{width:100%;padding:11px;background:var(--primary);color:#fff;border:none;border-radius:var(--r);font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-login:hover{background:var(--primary-d)}.btn-login:active{transform:scale(.99)}
+.auth-demo{margin-top:18px;padding:11px 14px;background:var(--surface2);border-radius:var(--r);border:1px dashed var(--border);font-size:12px;color:var(--t3);line-height:1.6}
+.auth-demo strong{color:var(--t2)}
+.auth-err{font-size:13px;color:var(--danger);margin-bottom:10px;display:none;padding:8px 12px;background:var(--danger-l);border-radius:var(--r)}
+
+/* ── APP SHELL ────────────────────────────── */
+#app{display:none;height:100%;flex-direction:column}
+#app.on{display:flex}
+.shell{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ──────────────────────────────── */
+.sidebar{width:240px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.sb-brand{padding:17px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border2)}
+.sb-brand .brand-icon{width:32px;height:32px;border-radius:8px;font-size:16px}
+.sb-brand .brand-name{font-size:15px}
+.sb-section{padding:14px 18px 4px;font-size:10px;font-weight:700;color:var(--t3);letter-spacing:.9px;text-transform:uppercase}
+.nav{display:flex;align-items:center;gap:9px;padding:9px 10px;margin:1px 8px;border-radius:var(--r);font-size:13.5px;font-weight:500;color:var(--t2);cursor:pointer;transition:.15s;user-select:none;text-decoration:none}
+.nav i{font-size:18px;flex-shrink:0;opacity:.85}
+.nav:hover{background:var(--surface2);color:var(--t1)}
+.nav.active{background:var(--primary-l);color:var(--primary)}
+.nav.active i{opacity:1}
+.nav-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:99px;min-width:18px;text-align:center}
+.nav-badge.y{background:var(--warn)}
+.sb-bottom{margin-top:auto;border-top:1px solid var(--border2)}
+.sb-user{display:flex;align-items:center;gap:9px;padding:14px 18px;cursor:pointer}
+.user-av{width:32px;height:32px;border-radius:50%;background:var(--primary-l);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0}
+.user-n{font-size:13px;font-weight:500;color:var(--t1)}
+.user-r{font-size:11px;color:var(--t3)}
+.sb-logout{margin-left:auto;color:var(--t3);font-size:17px;cursor:pointer;padding:4px;border-radius:6px;transition:.15s}
+.sb-logout:hover{color:var(--danger);background:var(--danger-l)}
+
+/* ── TOPBAR ───────────────────────────────── */
+.topbar{height:62px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:14px;box-shadow:0 1px 2px rgba(60,64,67,.06)}
+.topbar-title{font-size:17px;font-weight:500;color:var(--t1);flex:1}
+.top-search{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:99px;padding:7px 16px;min-width:230px}
+.top-search input{background:none;border:none;outline:none;font-family:inherit;font-size:13px;color:var(--t1);width:100%}
+.top-search input::placeholder{color:var(--t3)}
+.top-search i{color:var(--t3);font-size:16px}
+.icon-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;background:none;color:var(--t2);font-size:19px;position:relative;transition:.15s}
+.icon-btn:hover{background:var(--surface2)}
+.ndot{position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:2px solid #fff}
+
+/* ── MAIN ─────────────────────────────────── */
+.main{flex:1;overflow-y:auto;padding:22px;background:var(--bg)}
+.mod{display:none}.mod.active{display:block}
+
+/* ── PAGE HEADER ──────────────────────────── */
+.pg-hd{margin-bottom:20px}
+.bc{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t3);margin-bottom:6px}
+.bc i{font-size:12px}
+.pg-title{font-size:21px;font-weight:600;color:var(--t1)}
+.pg-sub{font-size:13px;color:var(--t2);margin-top:3px}
+
+/* ── STAT CARDS ───────────────────────────── */
+.sg{display:grid;gap:14px;margin-bottom:18px}
+.sg-4{grid-template-columns:repeat(4,1fr)}.sg-3{grid-template-columns:repeat(3,1fr)}
+.sc{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);padding:16px 18px;transition:.2s}
+.sc:hover{box-shadow:var(--shadow)}
+.sc-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px}
+.ic-b{background:var(--primary-l);color:var(--primary)}.ic-g{background:var(--success-l);color:var(--success)}
+.ic-r{background:var(--danger-l);color:var(--danger)}.ic-y{background:var(--warn-l);color:#9A6700}
+.ic-p{background:var(--purple-l);color:var(--purple)}.ic-t{background:var(--teal-l);color:var(--teal)}
+.sc-val{font-size:26px;font-weight:600;color:var(--t1);line-height:1.1}
+.sc-lbl{font-size:12px;color:var(--t2);font-weight:500;margin-top:2px}
+.sc-chg{font-size:11px;display:flex;align-items:center;gap:3px;margin-top:6px}
+.up{color:var(--success)}.dn{color:var(--danger)}
+
+/* ── CARDS ────────────────────────────────── */
+.card{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);padding:18px 20px;margin-bottom:18px}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title{font-size:14px;font-weight:600;color:var(--t1)}
+.card-sub{font-size:12px;color:var(--t3);margin-top:2px}
+
+/* ── BADGES ───────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600}
+.bdot{width:5px;height:5px;border-radius:50%}
+.b-online{background:var(--success-l);color:#1E8E3E}.b-online .bdot{background:var(--success)}
+.b-offline{background:var(--danger-l);color:#C5221F}.b-offline .bdot{background:var(--danger)}
+.b-idle{background:var(--warn-l);color:#9A6700}.b-idle .bdot{background:var(--warn)}
+.b-critical{background:var(--danger-l);color:#C5221F}
+.b-warning{background:var(--warn-l);color:#9A6700}
+.b-info{background:var(--info-l);color:var(--primary)}
+.b-admin{background:var(--primary-l);color:var(--primary)}
+.b-manager{background:var(--purple-l);color:var(--purple)}
+.b-viewer{background:var(--surface2);color:var(--t2)}
+.b-active{background:var(--success-l);color:#1E8E3E}.b-inactive{background:var(--surface2);color:var(--t3)}
+
+/* ── TABLES ───────────────────────────────── */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{text-align:left;padding:9px 13px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:11px 13px;border-bottom:1px solid var(--border2);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#FAFAFA}
+.dev-cell{display:flex;align-items:center;gap:9px}
+.dev-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.di-a{background:var(--success-l);color:var(--success)}.di-t{background:var(--primary-l);color:var(--primary)}
+.dev-name{font-size:13px;font-weight:500;color:var(--t1)}
+.dev-id{font-size:11px;color:var(--t3);font-family:monospace}
+.bat-bar{width:52px;height:7px;background:var(--border);border-radius:99px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:5px}
+.bat-fill{height:100%;border-radius:99px;background:var(--success)}
+.bat-fill.w{background:var(--warn)}.bat-fill.l{background:var(--danger)}
+
+/* ── TOOLBAR ──────────────────────────────── */
+.tb{display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap}
+.sb-in{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:7px 12px;flex:1;min-width:180px}
+.sb-in input{border:none;outline:none;background:none;font-family:inherit;font-size:13px;color:var(--t1);width:100%}
+.sb-in input::placeholder{color:var(--t3)}
+select.sf{padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px;color:var(--t1);background:var(--surface);outline:none;cursor:pointer}
+.btn-sec{display:inline-flex;align-items:center;gap:5px;padding:8px 13px;border-radius:var(--r);border:1px solid var(--border);background:var(--surface);font-family:inherit;font-size:13px;font-weight:500;color:var(--t1);cursor:pointer;transition:.15s;white-space:nowrap}
+.btn-sec:hover{background:var(--surface2)}
+.btn-acc{display:inline-flex;align-items:center;gap:5px;padding:8px 13px;border-radius:var(--r);border:none;background:var(--primary);font-family:inherit;font-size:13px;font-weight:500;color:#fff;cursor:pointer;transition:.15s;white-space:nowrap}
+.btn-acc:hover{background:var(--primary-d)}
+.act-btn{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--t2);cursor:pointer;transition:.15s;font-family:inherit;white-space:nowrap}
+.act-btn:hover{background:var(--surface2);border-color:var(--primary);color:var(--primary)}
+.act-btn.dng:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-l)}
+
+/* ── LOGITRACKER ──────────────────────────── */
+.logi-sg{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.logi-s{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:12px 14px;display:flex;align-items:center;gap:11px}
+.logi-s i{font-size:22px}
+.logi-sv{font-size:18px;font-weight:600;color:var(--t1)}.logi-sl{font-size:11px;color:var(--t3)}
+.logi-layout{display:grid;grid-template-columns:290px 1fr;gap:14px;height:calc(100vh - 62px - 210px);min-height:480px}
+.logi-sb{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.logi-sbh{padding:13px 14px;border-bottom:1px solid var(--border)}
+.logi-sbh .t{font-size:13px;font-weight:600;color:var(--t1)}.logi-sbh .s{font-size:11px;color:var(--t3);margin-top:1px}
+.veh-list{flex:1;overflow-y:auto;padding:6px}
+.veh{display:flex;align-items:center;gap:9px;padding:10px 11px;border-radius:var(--r);cursor:pointer;transition:.15s}
+.veh:hover{background:var(--surface2)}.veh.sel{background:var(--primary-l)}
+.vdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.vdot.mv{background:var(--success);box-shadow:0 0 0 3px rgba(52,168,83,.2)}
+.vdot.st{background:var(--warn);box-shadow:0 0 0 3px rgba(249,171,0,.2)}
+.vdot.of{background:var(--t3)}
+.vn{font-size:13px;font-weight:500;color:var(--t1)}.vd{font-size:11px;color:var(--t3);margin-top:1px}
+.vspd{margin-left:auto;font-size:12px;font-weight:600;color:var(--t2)}
+.map-wrap{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);overflow:hidden;position:relative}
+#logi-map{width:100%;height:100%}
+.map-info{position:absolute;bottom:14px;right:14px;z-index:1000;background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:13px;min-width:200px;box-shadow:var(--shadow);display:none}
+.map-info.on{display:block}
+.mi-title{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:9px}
+.mi-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+.mi-lbl{color:var(--t3)}.mi-val{color:var(--t1);font-weight:500}
+
+/* ── ALERTS ───────────────────────────────── */
+.fil-row{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap}
+.fil{padding:5px 14px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surface);cursor:pointer;color:var(--t2);transition:.15s;font-family:inherit}
+.fil:hover{border-color:var(--primary);color:var(--primary)}.fil.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.al-item{display:flex;align-items:flex-start;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border2)}
+.al-item:last-child{border-bottom:none}.al-item:hover{background:var(--surface2)}
+.al-ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;margin-top:1px}
+.al-ic{background:var(--danger-l);color:var(--danger)}.al-iw{background:var(--warn-l);color:#9A6700}.al-ii{background:var(--info-l);color:var(--primary)}
+.al-title{font-size:13px;font-weight:600;color:var(--t1)}.al-desc{font-size:12px;color:var(--t2);margin-top:3px;line-height:1.5}
+.al-meta{display:flex;align-items:center;gap:10px;margin-top:5px}
+.al-time{font-size:11px;color:var(--t3)}.al-src{font-size:11px;color:var(--t3)}
+
+/* ── REPORTS ──────────────────────────────── */
+.rg{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.rc{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);padding:18px;display:flex;flex-direction:column;gap:10px;transition:.2s;cursor:default}
+.rc:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+.r-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.r-name{font-size:14px;font-weight:600;color:var(--t1)}
+.r-desc{font-size:12px;color:var(--t2);line-height:1.5}
+.r-meta{font-size:11px;color:var(--t3)}
+.r-acts{display:flex;gap:7px;margin-top:4px}
+
+/* ── SETTINGS ─────────────────────────────── */
+.set-layout{display:grid;grid-template-columns:190px 1fr;gap:18px}
+.set-nav{display:flex;flex-direction:column;gap:2px}
+.set-ni{padding:9px 12px;border-radius:var(--r);font-size:13.5px;font-weight:500;color:var(--t2);cursor:pointer;transition:.15s;display:flex;align-items:center;gap:8px}
+.set-ni i{font-size:17px;opacity:.8}.set-ni:hover{background:var(--surface2);color:var(--t1)}.set-ni.active{background:var(--primary-l);color:var(--primary)}
+.set-pn{display:none}.set-pn.active{display:block}
+.ff{margin-bottom:18px}
+.ff label{display:block;font-size:12px;font-weight:600;color:var(--t2);margin-bottom:5px;letter-spacing:.3px;text-transform:uppercase}
+.ff input,.ff select,.ff textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13.5px;color:var(--t1);background:var(--surface);outline:none;transition:.2s}
+.ff input:focus,.ff select:focus,.ff textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(25,103,210,.1)}
+.ff .hint{font-size:11px;color:var(--t3);margin-top:3px}
+.fc2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tog-wrap{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border2)}
+.tog-lbl{font-size:13.5px;font-weight:500;color:var(--t1)}.tog-d{font-size:12px;color:var(--t3);margin-top:1px}
+.tog{position:relative;width:42px;height:23px;background:var(--border);border-radius:99px;cursor:pointer;transition:.2s;flex-shrink:0}
+.tog.on{background:var(--primary)}
+.tog::after{content:'';position:absolute;top:2.5px;left:2.5px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tog.on::after{transform:translateX(19px)}
+.sec-title{font-size:15px;font-weight:600;color:var(--t1);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.api-row{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:9px}
+.api-n{font-size:13px;font-weight:500;color:var(--t1);min-width:130px}
+.api-k{flex:1;font-family:monospace;font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.api-scope{font-size:11px;color:var(--t3)}
+.int-row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--border2)}
+.int-ico{width:38px;height:38px;border-radius:9px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--t2);flex-shrink:0}
+
+/* ── OVERVIEW GRID ────────────────────────── */
+.ov-bottom{display:grid;grid-template-columns:1.9fr 1fr;gap:16px}
+.health-bar-wrap{margin-bottom:12px}
+.health-bar-wrap:last-child{margin-bottom:0}
+.hb-top{display:flex;justify-content:space-between;margin-bottom:4px}
+.hb-lbl{font-size:12px;color:var(--t2)}.hb-val{font-size:12px;font-weight:600;color:var(--t1)}
+.hbar{height:5px;background:var(--border);border-radius:99px;overflow:hidden}
+.hbar-fill{height:100%;border-radius:99px;transition:width .6s ease}
+
+/* ── TOAST ────────────────────────────────── */
+.toast{position:fixed;bottom:22px;right:22px;z-index:9999;background:var(--t1);color:#fff;padding:11px 17px;border-radius:var(--r);font-size:13px;box-shadow:var(--shadow-lg);transform:translateY(80px);opacity:0;transition:.3s cubic-bezier(.34,1.56,.64,1);pointer-events:none;max-width:340px}
+.toast.on{transform:translateY(0);opacity:1}
+</style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
+<body>
 
-    <div class="max-w-md w-full glass-morphism rounded-2xl p-8 shadow-2xl">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                LogiTrack
-            </h1>
-            <p class="text-slate-400 text-sm mt-2">Live Vehicle Tracker</p>
-        </header>
-
-        <form id="trackingForm" class="space-y-5">
-            <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Driver Name</label>
-                <input type="text" id="driverName" required 
-                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-            </div>
-
-            <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Vehicle Number</label>
-                <input type="text" id="vehicleNo" required 
-                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-            </div>
-
-            <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Chassis Number (Optional)</label>
-                <input type="text" id="chassisNo" 
-                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-            </div>
-
-            <button type="button" id="startBtn" 
-                class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-95 transition-all">
-                START TRACKING
-            </button>
-        </form>
-
-        <div id="statusPanel" class="hidden mt-8 pt-6 border-t border-slate-800">
-            <div class="flex items-center justify-between mb-4">
-                <span class="flex items-center gap-2">
-                    <span class="w-3 h-3 bg-emerald-500 rounded-full status-pulse"></span>
-                    <span class="text-sm font-medium">Live Tracking Active</span>
-                </span>
-                <button id="stopBtn" class="text-red-400 text-xs font-bold hover:underline">STOP</button>
-            </div>
-            <pre id="jsonOutput" class="bg-black/50 p-4 rounded-lg text-[10px] font-mono text-emerald-400 overflow-x-auto"></pre>
-        </div>
+<!-- ══════════════ AUTH ══════════════ -->
+<div id="auth">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-icon"><i class="ti ti-device-mobile-cog"></i></div>
+      <div class="brand-name">Fleet<span>MDM</span></div>
     </div>
+    <h1 class="auth-heading">Welcome back</h1>
+    <p class="auth-sub">Sign in to your management dashboard</p>
+    <div class="auth-err" id="auth-err"><i class="ti ti-alert-circle"></i> Invalid email or password.</div>
+    <div class="fg"><label>Email address</label>
+      <input type="email" id="inp-email" value="admin@company.com" placeholder="admin@company.com"></div>
+    <div class="fg"><label>Password</label>
+      <input type="password" id="inp-pass" value="Admin@123" placeholder="••••••••"></div>
+    <div class="auth-row">
+      <label class="auth-remember"><input type="checkbox" checked> Remember me</label>
+      <span class="auth-forget">Forgot password?</span>
+    </div>
+    <button class="btn-login" onclick="doLogin()">
+      <i class="ti ti-login"></i> Sign In
+    </button>
+    <div class="auth-demo">
+      <strong>Demo:</strong> admin@company.com &nbsp;/&nbsp; Admin@123
+    </div>
+  </div>
+</div>
 
-    <script src="D:\Scheduled task\temp\temp.cts.scripts\app.js"></script>
+<!-- ══════════════ APP ══════════════ -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Dashboard Overview</div>
+    <div class="top-search">
+      <i class="ti ti-search"></i>
+      <input type="text" placeholder="Search devices, vehicles, alerts…">
+    </div>
+    <div style="display:flex;align-items:center;gap:2px">
+      <button class="icon-btn" onclick="toast('3 unresolved alerts — check Alerts module')"><i class="ti ti-bell"></i><span class="ndot"></span></button>
+      <button class="icon-btn" onclick="toast('Data refreshed ✓')"><i class="ti ti-refresh"></i></button>
+      <button class="icon-btn"><i class="ti ti-help-circle"></i></button>
+    </div>
+  </div>
+  <div class="shell">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sb-brand">
+        <div class="brand-icon"><i class="ti ti-device-mobile-cog"></i></div>
+        <div class="brand-name">Fleet<span>MDM</span></div>
+      </div>
+      <div class="sb-section">Main</div>
+      <a class="nav active" data-m="overview" onclick="nav(this,'overview','Dashboard Overview')"><i class="ti ti-layout-dashboard"></i> Overview</a>
+      <a class="nav" data-m="devices" onclick="nav(this,'devices','MDM Devices')"><i class="ti ti-device-mobile"></i> MDM Devices <span class="nav-badge" id="nb-dev">14</span></a>
+      <a class="nav" data-m="logi" onclick="nav(this,'logi','LogiTracker — Fleet Map')"><i class="ti ti-map-pin"></i> LogiTracker <span class="nav-badge y" id="nb-logi">8</span></a>
+      <div class="sb-section" style="margin-top:6px">Monitoring</div>
+      <a class="nav" data-m="alerts" onclick="nav(this,'alerts','Alerts & Notifications')"><i class="ti ti-alert-triangle"></i> Alerts <span class="nav-badge" id="nb-alert">3</span></a>
+      <a class="nav" data-m="reports" onclick="nav(this,'reports','Reports & Analytics')"><i class="ti ti-chart-bar"></i> Reports</a>
+      <div class="sb-section" style="margin-top:6px">Administration</div>
+      <a class="nav" data-m="admin" onclick="nav(this,'admin','Admin Credentials')"><i class="ti ti-users"></i> Admin Users</a>
+      <a class="nav" data-m="settings" onclick="nav(this,'settings','System Settings')"><i class="ti ti-settings"></i> Settings</a>
+      <div class="sb-bottom">
+        <div class="sb-user">
+          <div class="user-av">SA</div>
+          <div><div class="user-n">Super Admin</div><div class="user-r">System Administrator</div></div>
+          <div class="sb-logout" onclick="doLogout()" title="Sign out"><i class="ti ti-logout"></i></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+
+      <!-- ── OVERVIEW ─────────────────────── -->
+      <div class="mod active" id="mod-overview">
+        <div class="pg-hd">
+          <div class="bc"><span>FleetMDM</span><i class="ti ti-chevron-right"></i><span>Overview</span></div>
+          <div class="pg-title">Dashboard Overview</div>
+          <div class="pg-sub" id="ov-greeting">Loading…</div>
+        </div>
+        <div class="sg sg-4">
+          <div class="sc"><div class="sc-icon ic-b"><i class="ti ti-device-mobile"></i></div><div class="sc-val">14</div><div class="sc-lbl">Total Devices</div><div class="sc-chg up"><i class="ti ti-trending-up"></i> +2 this week</div></div>
+          <div class="sc"><div class="sc-icon ic-g"><i class="ti ti-wifi"></i></div><div class="sc-val">9</div><div class="sc-lbl">Online Devices</div><div class="sc-chg up"><i class="ti ti-trending-up"></i> 64% uptime</div></div>
+          <div class="sc"><div class="sc-icon ic-r"><i class="ti ti-wifi-off"></i></div><div class="sc-val">5</div><div class="sc-lbl">Offline Devices</div><div class="sc-chg dn"><i class="ti ti-trending-down"></i> -1 from yesterday</div></div>
+          <div class="sc"><div class="sc-icon ic-y"><i class="ti ti-truck"></i></div><div class="sc-val">8</div><div class="sc-lbl">Active Vehicles</div><div class="sc-chg up"><i class="ti ti-trending-up"></i> 6 in transit</div></div>
+        </div>
+        <div class="ov-bottom">
+          <div class="card">
+            <div class="card-hd">
+              <div><div class="card-title">Recent Device Activity</div><div class="card-sub">Last 24 hours</div></div>
+              <button class="btn-sec" onclick="nav(document.querySelector('[data-m=devices]'),'devices','MDM Devices')"><i class="ti ti-arrow-right"></i> View All</button>
+            </div>
+            <div class="tw"><table><thead><tr><th>Device</th><th>User</th><th>Status</th><th>Last Seen</th><th>Battery</th></tr></thead>
+            <tbody id="ov-dev-tb"></tbody></table></div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-hd"><div class="card-title">System Health</div></div>
+              <div id="ov-health"></div>
+            </div>
+            <div class="card">
+              <div class="card-hd">
+                <div class="card-title">Active Alerts</div>
+                <button class="btn-sec" style="font-size:11px;padding:5px 9px" onclick="nav(document.querySelector('[data-m=alerts]'),'alerts','Alerts & Notifications')">View All</button>
+              </div>
+              <div id="ov-alerts-w"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── MDM DEVICES ───────────────────── -->
+      <div class="mod" id="mod-devices">
+        <div class="pg-hd">
+          <div class="bc"><span>FleetMDM</span><i class="ti ti-chevron-right"></i><span>MDM Devices</span></div>
+          <div class="pg-title">MDM Devices</div>
+          <div class="pg-sub">Manage all enrolled Android devices. Connect via your Android MDM app.</div>
+        </div>
+        <div class="sg sg-3">
+          <div class="sc"><div class="sc-icon ic-b"><i class="ti ti-device-mobile"></i></div><div class="sc-val">14</div><div class="sc-lbl">Total Enrolled</div></div>
+          <div class="sc"><div class="sc-icon ic-g"><i class="ti ti-shield-check"></i></div><div class="sc-val">11</div><div class="sc-lbl">Compliant</div></div>
+          <div class="sc"><div class="sc-icon ic-r"><i class="ti ti-shield-x"></i></div><div class="sc-val">3</div><div class="sc-lbl">Non-Compliant</div></div>
+        </div>
+        <div class="card">
+          <div class="tb">
+            <div class="sb-in"><i class="ti ti-search" style="color:var(--t3);font-size:15px"></i><input type="text" id="dev-search" placeholder="Search name, ID, user…" oninput="filterDev()"></div>
+            <select class="sf" id="dev-st" onchange="filterDev()"><option value="">All Status</option><option value="online">Online</option><option value="offline">Offline</option><option value="idle">Idle</option></select>
+            <select class="sf" id="dev-tp" onchange="filterDev()"><option value="">All Types</option><option value="android">Android</option><option value="tablet">Tablet</option></select>
+            <button class="btn-acc" onclick="toast('Enroll device: POST /api/devices/enroll — connect Android app token')"><i class="ti ti-plus"></i> Enroll Device</button>
+          </div>
+          <div class="tw"><table>
+            <thead><tr><th>Device</th><th>User / Location</th><th>OS</th><th>Status</th><th>Last Seen</th><th>Battery</th><th>Actions</th></tr></thead>
+            <tbody id="dev-tb"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ── LOGITRACKER ───────────────────── -->
+      <div class="mod" id="mod-logi">
+        <div class="pg-hd">
+          <div class="bc"><span>FleetMDM</span><i class="ti ti-chevron-right"></i><span>LogiTracker</span></div>
+          <div class="pg-title">LogiTracker — Fleet Tracking</div>
+          <div class="pg-sub">Real-time GPS tracking for your logistics fleet. Replace static data with a WebSocket feed from your backend.</div>
+        </div>
+        <div class="logi-sg">
+          <div class="logi-s">
+            <i class="ti ti-truck" style="color:var(--primary)"></i>
+            <div><div class="logi-sv" id="stat-total">0</div><div class="logi-sl">Total Vehicles</div></div>
+          </div>
+          <div class="logi-s">
+            <i class="ti ti-navigation" style="color:var(--success)"></i>
+            <div><div class="logi-sv" id="stat-transit">0</div><div class="logi-sl">In Transit</div></div>
+          </div>
+          <div class="logi-s">
+            <i class="ti ti-parking" style="color:var(--warn)"></i>
+            <div><div class="logi-sv" id="stat-parked">0</div><div class="logi-sl">Parked</div></div>
+          </div>
+          <!-- Replaced 'km Today' with 'History' -->
+          <div class="logi-s" style="cursor:pointer; border-color:var(--purple);" onclick="toast('History view coming soon! Will fetch past routes from database.')">
+            <i class="ti ti-history" style="color:var(--purple)"></i>
+            <div><div class="logi-sv">History</div><div class="logi-sl">View Driver Logs</div></div>
+          </div>
+        </div>
+        <div class="logi-layout">
+          <div class="logi-sb">
+            <div class="logi-sbh"><div class="t">Active Fleet</div><div class="s">Click a vehicle to track on map</div></div>
+            <div class="veh-list" id="veh-list"></div>
+          </div>
+          <div class="map-wrap">
+            <div id="logi-map"></div>
+            <div class="map-info" id="map-info">
+              <div class="mi-title" id="mi-name">—</div>
+              <div class="mi-row"><span class="mi-lbl">Speed</span><span class="mi-val" id="mi-speed">—</span></div>
+              <div class="mi-row"><span class="mi-lbl">Driver</span><span class="mi-val" id="mi-driver">—</span></div>
+              <div class="mi-row"><span class="mi-lbl">Updated</span><span class="mi-val" id="mi-time">—</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ALERTS ────────────────────────── -->
+      <div class="mod" id="mod-alerts">
+        <div class="pg-hd">
+          <div class="bc"><span>FleetMDM</span><i class="ti ti-chevron-right"></i><span>Alerts</span></div>
+          <div class="pg-title">Alerts & Notifications</div>
+          <div class="pg-sub">Monitor critical events across your fleet and devices.</div>
+        </div>
+        <div class="sg sg-4">
+          <div class="sc"><div class="sc-icon ic-r"><i class="ti ti-alert-octagon"></i></div><div class="sc-val" id="cnt-c">3</div><div class="sc-lbl">Critical</div></div>
+          <div class="sc"><div class="sc-icon ic-y"><i class="ti ti-alert-triangle"></i></div><div class="sc-val" id="cnt-w">5</div><div class="sc-lbl">Warning</div></div>
+          <div class="sc"><div class="sc-icon ic-b"><i class="ti ti-info-circle"></i></div><div class="sc-val" id="cnt-i">4</div><div class="sc-lbl">Info</div></div>
+          <div class="sc"><div class="sc-icon ic-g"><i class="ti ti-circle-check"></i></div><div class="sc-val" id="cnt-r">0</div><div class="sc-lbl">Resolved</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title">All Alerts</div>
+            <button class="btn-sec" onclick="resolveAll()"><i class="ti ti-checks"></i> Resolve All</button>
+          </div>
+          <div class="fil-row">
+            <button class="fil active" onclick="filAlert(this,'all')">All</button>
+            <button class="fil" onclick="filAlert(this,'critical')">Critical</button>
+            <button class="fil" onclick="filAlert(this,'warning')">Warning</button>
+            <button class="fil" onclick="filAlert(this,'info')">Info</button>
+          </div>
+          <div id="alerts-list"></div>
+        </div>
+      </div>
+
+      <!-- ── REPORTS ───────────────────────── -->
+      <div class="mod" id="mod-reports">
+        <div class="pg-hd">
+          <div class="bc"><span>FleetMDM</span><i class="ti ti-chevron-right"></i><span>Reports</span></div>
+          <div class="pg-title">Reports & Analytics</div>
+          <div class="pg-sub">Generate, schedule, and download reports for devices and fleet operations.</div>
+        </div>
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-hd"><div class="card-title">Date Range Filter</div></div>
+          <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <div class="ff" style="margin:0;flex:1;min-width:150px"><label>From</label><input type="date" value="2025-01-01"></div>
+            <div class="ff" style="margin:0;flex:1;min-width:150px"><label>To</label><input type="date" value="2025-01-31"></div>
+            <button class="btn-acc" onclick="toast('Date filter applied')"><i class="ti ti-filter"></i> Apply</button>
+          </div>
+        </div>
+        <div class="rg" id="reports-grid"></div>
+      </div>
+
+      <!-- ── ADMIN ─────────────────────────── -->
+      <div class="mod" id="mod-admin">
+        <div class="pg-hd">
+          <div class="bc"><span>FleetMDM</span><i class="ti ti-chevron-right"></i><span>Admin Users</span></div>
+          <div class="pg-title">Admin Credentials</div>
+          <div class="pg-sub">Manage administrator accounts, roles, and access permissions.</div>
+        </div>
+        <div class="card">
+          <div class="tb">
+            <div class="sb-in" style="flex:1"><i class="ti ti-search" style="color:var(--t3);font-size:15px"></i><input type="text" placeholder="Search admin users…"></div>
+            <select class="sf"><option value="">All Roles</option><option>Admin</option><option>Manager</option><option>Viewer</option></select>
+            <button class="btn-acc" onclick="toast('Add admin: POST /api/admins — connect your backend')"><i class="ti ti-user-plus"></i> Add Admin</button>
+          </div>
+          <div class="tw"><table>
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>2FA</th><th>Actions</th></tr></thead>
+            <tbody id="admin-tb"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ── SETTINGS ──────────────────────── -->
+      <div class="mod" id="mod-settings">
+        <div class="pg-hd">
+          <div class="bc"><span>FleetMDM</span><i class="ti ti-chevron-right"></i><span>Settings</span></div>
+          <div class="pg-title">System Settings</div>
+          <div class="pg-sub">Configure the MDM platform, integrations, and security policies.</div>
+        </div>
+        <div class="set-layout">
+          <div>
+            <div class="card" style="padding:8px">
+              <div class="set-nav">
+                <div class="set-ni active" onclick="setTab(this,'gen')"><i class="ti ti-settings"></i> General</div>
+                <div class="set-ni" onclick="setTab(this,'sec')"><i class="ti ti-shield"></i> Security</div>
+                <div class="set-ni" onclick="setTab(this,'notif')"><i class="ti ti-bell"></i> Notifications</div>
+                <div class="set-ni" onclick="setTab(this,'api')"><i class="ti ti-api"></i> API Keys</div>
+                <div class="set-ni" onclick="setTab(this,'int')"><i class="ti ti-plug"></i> Integrations</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card set-pn active" id="stp-gen">
+              <div class="sec-title">General Settings</div>
+              <div class="fc2">
+                <div class="ff"><label>Organization Name</label><input value="FleetMDM Corp"></div>
+                <div class="ff"><label>Domain</label><input value="fleetmdm.company.com"></div>
+              </div>
+              <div class="fc2">
+                <div class="ff"><label>Admin Email</label><input type="email" value="admin@company.com"><div class="hint">Primary contact for system alerts</div></div>
+                <div class="ff"><label>Timezone</label><select><option selected>Asia/Kolkata (IST +5:30)</option><option>UTC (GMT +0:00)</option><option>America/New_York</option></select></div>
+              </div>
+              <div class="ff"><label>Platform Display Name</label><input value="FleetMDM — Device & Fleet Management"></div>
+              <div class="fc2">
+                <div class="ff"><label>Data Retention</label><select><option>90 days</option><option selected>180 days</option><option>365 days</option><option>Forever</option></select><div class="hint">How long device logs are stored</div></div>
+                <div class="ff"><label>Default Language</label><select><option selected>English</option><option>Hindi</option><option>Gujarati</option></select></div>
+              </div>
+              <button class="btn-acc" onclick="toast('General settings saved ✓')"><i class="ti ti-device-floppy"></i> Save Changes</button>
+            </div>
+            <div class="card set-pn" id="stp-sec">
+              <div class="sec-title">Security Settings</div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Two-Factor Authentication</div><div class="tog-d">Require 2FA for all admin accounts</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Remote Device Lock</div><div class="tog-d">Allow locking enrolled devices remotely</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Remote Wipe</div><div class="tog-d">Emergency factory reset of enrolled devices</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Geofencing</div><div class="tog-d">Alert when vehicles exit defined zones</div></div><div class="tog" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Auto-lock on Lost Report</div><div class="tog-d">Lock device when reported missing</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="fc2" style="margin-top:18px">
+                <div class="ff"><label>Session Timeout (min)</label><input type="number" value="60"><div class="hint">Auto-logout inactive sessions</div></div>
+                <div class="ff"><label>Max Failed Login Attempts</label><input type="number" value="5"><div class="hint">Lock after N failures</div></div>
+              </div>
+              <button class="btn-acc" onclick="toast('Security settings saved ✓')"><i class="ti ti-device-floppy"></i> Save Changes</button>
+            </div>
+            <div class="card set-pn" id="stp-notif">
+              <div class="sec-title">Notification Preferences</div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Email Alerts</div><div class="tog-d">Send critical alerts to admin email</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Device Offline Alerts</div><div class="tog-d">Notify when a device goes offline</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Low Battery Alerts</div><div class="tog-d">Notify when battery drops below 20%</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Geofence Violations</div><div class="tog-d">Alert when a vehicle exits its zone</div></div><div class="tog" onclick="this.classList.toggle('on')"></div></div>
+              <div class="tog-wrap"><div><div class="tog-lbl">Daily Summary Report</div><div class="tog-d">Email daily fleet summary at 8:00 AM</div></div><div class="tog on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="ff" style="margin-top:18px"><label>Notification Email</label><input type="email" value="alerts@company.com"></div>
+              <div class="ff"><label>Webhook URL <span style="font-weight:400;color:var(--t3)">(POST alerts to your backend)</span></label><input type="url" placeholder="https://your-backend.com/api/webhook"><div class="hint">Your backend will receive a JSON payload for each alert</div></div>
+              <button class="btn-acc" onclick="toast('Notification preferences saved ✓')"><i class="ti ti-device-floppy"></i> Save Changes</button>
+            </div>
+            <div class="card set-pn" id="stp-api">
+              <div class="sec-title">API Keys & Tokens</div>
+              <p style="font-size:13px;color:var(--t2);margin-bottom:16px;line-height:1.6">Use these keys to connect your Android MDM app and integrations. Keys are passed as <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:12px">Authorization: Bearer &lt;key&gt;</code> headers.</p>
+              <div id="api-keys-list"></div>
+              <button class="btn-acc" style="margin-top:8px" onclick="toast('New API key generated — copy it now, shown only once!')"><i class="ti ti-plus"></i> Generate New Key</button>
+            </div>
+            <div class="card set-pn" id="stp-int">
+              <div class="sec-title">Integrations</div>
+              <div id="int-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast-el"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════
+   MOCK DATA — Replace each section with real API calls
+   See TODO comments for backend endpoint suggestions
+═══════════════════════════════════════════════════════ */
+
+// TODO: GET /api/devices → returns array of device objects
+const DEVICES = [
+  {id:'DEV-001',name:'Samsung Galaxy A54',user:'Ravi Kumar',type:'android',os:'Android 13',status:'online',seen:'2 min ago',bat:82,imei:'353012345678901',loc:'Ahmedabad'},
+  {id:'DEV-002',name:'Samsung Galaxy Tab A8',user:'Priya Shah',type:'tablet',os:'Android 12',status:'online',seen:'5 min ago',bat:65,imei:'353012345678902',loc:'Surat'},
+  {id:'DEV-003',name:'Redmi Note 12 Pro',user:'Arjun Patel',type:'android',os:'Android 13',status:'offline',seen:'2 hrs ago',bat:23,imei:'353012345678903',loc:'Vadodara'},
+  {id:'DEV-004',name:'OnePlus Nord CE 3',user:'Meena Verma',type:'android',os:'Android 14',status:'online',seen:'Just now',bat:91,imei:'353012345678904',loc:'Rajkot'},
+  {id:'DEV-005',name:'Realme 11 Pro+',user:'Suresh Joshi',type:'android',os:'Android 13',status:'idle',seen:'45 min ago',bat:57,imei:'353012345678905',loc:'Bhavnagar'},
+  {id:'DEV-006',name:'Samsung Galaxy A34',user:'Neha Gupta',type:'android',os:'Android 12',status:'online',seen:'8 min ago',bat:76,imei:'353012345678906',loc:'Gandhinagar'},
+  {id:'DEV-007',name:'Motorola Moto G84',user:'Vijay Singh',type:'android',os:'Android 13',status:'offline',seen:'1 day ago',bat:15,imei:'353012345678907',loc:'Unknown'},
+  {id:'DEV-008',name:'POCO X6 Pro',user:'Karan Mehta',type:'android',os:'Android 14',status:'online',seen:'1 min ago',bat:88,imei:'353012345678908',loc:'Surat'},
+  {id:'DEV-009',name:'Samsung Galaxy Tab S7',user:'Anjali Rao',type:'tablet',os:'Android 13',status:'online',seen:'15 min ago',bat:44,imei:'353012345678909',loc:'Ahmedabad'},
+  {id:'DEV-010',name:'Vivo Y100A',user:'Ramesh Chauhan',type:'android',os:'Android 13',status:'idle',seen:'30 min ago',bat:62,imei:'353012345678910',loc:'Anand'},
+  {id:'DEV-011',name:'Realme C55',user:'Pooja Nair',type:'android',os:'Android 13',status:'online',seen:'3 min ago',bat:93,imei:'353012345678911',loc:'Surat'},
+  {id:'DEV-012',name:'Samsung Galaxy M34',user:'Deepak Trivedi',type:'android',os:'Android 12',status:'offline',seen:'5 hrs ago',bat:8,imei:'353012345678912',loc:'Vadodara'},
+  {id:'DEV-013',name:'Redmi 12 5G',user:'Sneha Pillai',type:'android',os:'Android 13',status:'online',seen:'12 min ago',bat:71,imei:'353012345678913',loc:'Rajkot'},
+  {id:'DEV-014',name:'Tecno Spark 20 Pro',user:'Manoj Dubey',type:'android',os:'Android 14',status:'offline',seen:'3 days ago',bat:0,imei:'353012345678914',loc:'Unknown'},
+];
+
+// TODO: GET /api/vehicles → returns array with real-time lat/lng
+// TODO: WebSocket ws://your-backend/fleet/live for live position updates
+
+const firebaseConfig = {
+  databaseURL: "https://logitracker-a54e7-default-rtdb.firebaseio.com/"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+/* const VEHICLES = [
+  {id:'TRK-001',reg:'GJ-01-AA-1234',driver:'Ravi Kumar',status:'moving',speed:68,lat:23.0225,lng:72.5714,route:'Ahmedabad → Surat',cargo:'Electronics',fuel:74,update:'Just now'},
+  {id:'TRK-002',reg:'GJ-05-BB-5678',driver:'Suresh Patel',status:'moving',speed:82,lat:21.1702,lng:72.8311,route:'Surat → Mumbai',cargo:'Textiles',fuel:58,update:'1 min ago'},
+  {id:'TRK-003',reg:'GJ-06-CC-9012',driver:'Amit Shah',status:'stopped',speed:0,lat:22.3072,lng:73.1812,route:'Vadodara Hub',cargo:'Chemicals',fuel:45,update:'5 min ago'},
+  {id:'TRK-004',reg:'GJ-09-DD-3456',driver:'Pradeep Kumar',status:'moving',speed:55,lat:22.5726,lng:70.7139,route:'Rajkot → Jamnagar',cargo:'Auto Parts',fuel:62,update:'2 min ago'},
+  {id:'TRK-005',reg:'GJ-04-EE-7890',driver:'Kishore Nair',status:'moving',speed:71,lat:21.7645,lng:72.1519,route:'Bhavnagar → Ahmedabad',cargo:'Pharma',fuel:81,update:'3 min ago'},
+  {id:'TRK-006',reg:'GJ-02-FF-2345',driver:'Santosh Yadav',status:'moving',speed:60,lat:23.2156,lng:72.6369,route:'Gandhinagar → Mehsana',cargo:'FMCG',fuel:55,update:'Just now'},
+  {id:'TRK-007',reg:'GJ-15-GG-6789',driver:'Dinesh Solanki',status:'stopped',speed:0,lat:22.7196,lng:71.1907,route:'Anand Depot',cargo:'Dairy',fuel:90,update:'10 min ago'},
+  {id:'TRK-008',reg:'GJ-18-HH-0123',driver:'Mukesh Trivedi',status:'moving',speed:47,lat:24.5854,lng:72.9690,route:'Palanpur → Mehsana',cargo:'Agri Products',fuel:38,update:'4 min ago'},
+]; 
+*/
+let VEHICLES = {}; // This will be populated live from your phone
+let MAP = null, MARKERS = {};
+
+// TODO: GET /api/alerts → returns alert list; POST /api/alerts/:id/resolve
+const ALERTS = [
+  {id:1,type:'critical',ico:'ti-battery-off',title:'Critical: Device Battery Dead',desc:'DEV-014 (Tecno Spark 20 Pro) battery at 0%. Device may be lost or stolen. Investigate immediately.',src:'DEV-014',time:'3 days ago',resolved:false},
+  {id:2,type:'critical',ico:'ti-wifi-off',title:'Device Offline — 5+ Hours',desc:'DEV-012 (Samsung Galaxy M34) has been offline for over 5 hours. Last seen in Vadodara.',src:'DEV-012',time:'5 hrs ago',resolved:false},
+  {id:3,type:'critical',ico:'ti-alert-octagon',title:'Unauthorized App Detected',desc:'DEV-007 shows installation of an unauthorized application. MDM compliance policy violated.',src:'DEV-007',time:'1 day ago',resolved:false},
+  {id:4,type:'warning',ico:'ti-battery-2',title:'Low Battery — DEV-003',desc:'Redmi Note 12 Pro battery at 23%. Driver Arjun Patel should charge the device.',src:'DEV-003',time:'2 hrs ago',resolved:false},
+  {id:5,type:'warning',ico:'ti-fuel-off',title:'Low Fuel — TRK-008',desc:'Vehicle GJ-18-HH-0123 fuel level at 38%. Schedule a refueling stop on Palanpur route.',src:'TRK-008',time:'1 hr ago',resolved:false},
+  {id:6,type:'warning',ico:'ti-map-pin-off',title:'GPS Signal Lost — TRK-003',desc:'Vehicle GPS signal is intermittent near Vadodara Hub area. Check antenna.',src:'TRK-003',time:'20 min ago',resolved:false},
+  {id:7,type:'warning',ico:'ti-lock-open',title:'Screen Lock Policy Modified',desc:'DEV-005 (Realme 11 Pro+) screen lock settings changed outside MDM control.',src:'DEV-005',time:'45 min ago',resolved:false},
+  {id:8,type:'warning',ico:'ti-user-off',title:'Driver Mismatch Detected',desc:'TRK-004 linked device does not match registered driver profile.',src:'TRK-004',time:'3 hrs ago',resolved:false},
+  {id:9,type:'info',ico:'ti-device-mobile-plus',title:'New Device Enrolled',desc:'DEV-014 (Tecno Spark 20 Pro) enrolled via MDM app by Manoj Dubey.',src:'System',time:'3 days ago',resolved:false},
+  {id:10,type:'info',ico:'ti-refresh',title:'MDM Policy Updated',desc:'Device lock policy v2.3 deployed successfully to 11 compliant devices.',src:'Admin',time:'1 day ago',resolved:false},
+  {id:11,type:'info',ico:'ti-map-pin',title:'Geofence Entry — TRK-001',desc:'Vehicle GJ-01-AA-1234 entered Surat delivery zone at 14:32.',src:'TRK-001',time:'35 min ago',resolved:false},
+  {id:12,type:'info',ico:'ti-shield-check',title:'Compliance Scan Complete',desc:'Scheduled scan complete: 11/14 devices compliant with MDM policies.',src:'System',time:'6 hrs ago',resolved:false},
+];
+
+// TODO: GET /api/admins; POST /api/admins; PUT /api/admins/:id; DELETE /api/admins/:id
+const ADMINS = [
+  {id:1,name:'Super Admin',email:'admin@company.com',role:'admin',status:'active',login:'Just now',twofa:true,av:'SA'},
+  {id:2,name:'Fleet Manager',email:'fleet@company.com',role:'manager',status:'active',login:'2 hrs ago',twofa:true,av:'FM'},
+  {id:3,name:'IT Supervisor',email:'it@company.com',role:'admin',status:'active',login:'1 day ago',twofa:false,av:'IT'},
+  {id:4,name:'Operations Analyst',email:'ops@company.com',role:'viewer',status:'active',login:'3 days ago',twofa:false,av:'OA'},
+  {id:5,name:'Security Auditor',email:'audit@company.com',role:'viewer',status:'inactive',login:'2 weeks ago',twofa:true,av:'AU'},
+];
+
+const REPORTS = [
+  {ico:'ti-report-analytics',c:'b',name:'Daily Fleet Summary',desc:'Vehicle movements, distances, stops, and fuel consumption.',last:'Today, 8:00 AM',type:'PDF'},
+  {ico:'ti-shield-check',c:'g',name:'Device Compliance Report',desc:'MDM policy compliance status for all 14 enrolled devices.',last:'Yesterday, 6:00 PM',type:'PDF'},
+  {ico:'ti-map-route',c:'p',name:'Route History Report',desc:'Detailed route data, stop analysis, and driving patterns.',last:'2 days ago',type:'XLSX'},
+  {ico:'ti-cpu',c:'y',name:'Device Health Report',desc:'Battery, storage, app usage, and hardware diagnostics.',last:'Today, 9:00 AM',type:'PDF'},
+  {ico:'ti-user-check',c:'t',name:'Driver Behaviour Report',desc:'Speed violations, harsh braking, idle time, fuel efficiency.',last:'3 days ago',type:'PDF'},
+  {ico:'ti-clock-hour-4',c:'r',name:'Audit Log',desc:'Full trail of all admin actions, logins, and policy changes.',last:'Today, 12:00 PM',type:'CSV'},
+];
+
+const API_KEYS = [
+  {name:'Android MDM App',key:'mdm_live_pk_aB3cD4eF5gH6iJ7kL8mN',created:'Jan 1, 2025',scope:'devices:read,write'},
+  {name:'Fleet Tracker SDK',key:'logi_live_pk_qR1sT2uV3wX4yZ5aB6cD',created:'Jan 15, 2025',scope:'vehicles:read'},
+  {name:'Webhook Integration',key:'wh_live_pk_gH9iJ0kL1mN2oP3qR4sT',created:'Feb 1, 2025',scope:'alerts:read'},
+];
+
+const INTEGRATIONS = [
+  {name:'Firebase Cloud Messaging',desc:'Push notifications to enrolled Android devices',ok:true,ico:'ti-brand-firebase'},
+  {name:'Google Maps Platform',desc:'Enhanced routing, geocoding, and place search',ok:true,ico:'ti-map'},
+  {name:'SMTP Email Server',desc:'Send email alerts and report digests',ok:true,ico:'ti-mail'},
+  {name:'Slack Webhooks',desc:'Send real-time alerts to Slack channels',ok:false,ico:'ti-brand-slack'},
+  {name:'AWS S3 Storage',desc:'Backup device logs and generated reports',ok:false,ico:'ti-cloud'},
+  {name:'Custom REST API',desc:'Connect your own backend server endpoint',ok:false,ico:'ti-api'},
+];
+
+/* ═══════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════ */
+// TODO: Replace with real auth: POST /api/auth/login → {token, user, role}
+// Store token in localStorage: localStorage.setItem('mdm_token', token)
+function doLogin() {
+  const email = document.getElementById('inp-email').value.trim();
+  const pass = document.getElementById('inp-pass').value;
+  const err = document.getElementById('auth-err');
+  if (email === 'admin@company.com' && pass === 'Admin@123') {
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('app').classList.add('on');
+    initAll();
+  } else {
+    err.style.display = 'block';
+    setTimeout(() => err.style.display = 'none', 3500);
+  }
+}
+function doLogout() {
+  // TODO: POST /api/auth/logout + clear localStorage token
+  document.getElementById('app').classList.remove('on');
+  document.getElementById('auth').style.display = 'flex';
+  toast('Signed out successfully');
+}
+document.getElementById('inp-pass').addEventListener('keypress', e => { if(e.key==='Enter') doLogin(); });
+
+/* ═══════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════ */
+function nav(el, modId, title) {
+  document.querySelectorAll('.nav').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.mod').forEach(m => m.classList.remove('active'));
+  document.getElementById('mod-'+modId).classList.add('active');
+  document.getElementById('topbar-title').textContent = title;
+  if (modId === 'logi') initMap();
+}
+
+/* ═══════════════════════════════════════════
+   INIT ALL MODULES
+═══════════════════════════════════════════ */
+function initAll() {
+  // Set greeting
+  const h = new Date().getHours();
+  const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('ov-greeting').textContent = `${g}, Super Admin. Here's your fleet status for today.`;
+  renderOvDevices();
+  renderOvHealth();
+  renderOvAlerts();
+  renderDevices(DEVICES);
+  renderVehicles();
+  renderAlerts('all');
+  updateAlertCounts();
+  renderReports();
+  renderAdmins();
+  renderApiKeys();
+  renderIntegrations();
+}
+
+/* ═══════════════════════════════════════════
+   OVERVIEW
+═══════════════════════════════════════════ */
+function renderOvDevices() {
+  document.getElementById('ov-dev-tb').innerHTML = DEVICES.slice(0,6).map(d => `
+    <tr>
+      <td><div class="dev-cell">
+        <div class="dev-ico ${d.type==='tablet'?'di-t':'di-a'}">${d.type==='tablet'?'<i class="ti ti-device-tablet"></i>':'<i class="ti ti-device-mobile"></i>'}</div>
+        <div><div class="dev-name">${d.name}</div><div class="dev-id">${d.id}</div></div>
+      </div></td>
+      <td style="font-size:13px;color:var(--t2)">${d.user}</td>
+      <td><span class="badge b-${d.status}"><span class="bdot"></span>${cap(d.status)}</span></td>
+      <td style="font-size:12px;color:var(--t3)">${d.seen}</td>
+      <td>${bat(d.bat)}</td>
+    </tr>`).join('');
+}
+
+function renderOvHealth() {
+  const metrics = [
+    {l:'Device Uptime',v:64,c:var_s},
+    {l:'Policy Compliance',v:79,c:var_w},
+    {l:'Fleet Active',v:75,c:var_s},
+    {l:'Battery Health',v:57,c:var_w},
+  ];
+  document.getElementById('ov-health').innerHTML = metrics.map(m => `
+    <div class="health-bar-wrap">
+      <div class="hb-top"><span class="hb-lbl">${m.l}</span><span class="hb-val">${m.v}%</span></div>
+      <div class="hbar"><div class="hbar-fill" style="width:${m.v}%;background:${m.c}"></div></div>
+    </div>`).join('');
+}
+const var_s='var(--success)',var_w='var(--warn)';
+
+function renderOvAlerts() {
+  const active = ALERTS.filter(a=>!a.resolved).slice(0,3);
+  document.getElementById('ov-alerts-w').innerHTML = active.map(a => `
+    <div style="display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border2)">
+      <div class="al-ico al-i${a.type[0]}" style="width:28px;height:28px;font-size:14px;border-radius:7px;flex-shrink:0"><i class="ti ${a.ico}"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.title}</div>
+        <div style="font-size:11px;color:var(--t3)">${a.src} · ${a.time}</div>
+      </div>
+    </div>`).join('') + `<div style="padding-top:8px;font-size:12px;color:var(--t3);text-align:center">${ALERTS.filter(a=>!a.resolved).length} active alerts</div>`;
+}
+
+/* ═══════════════════════════════════════════
+   MDM DEVICES
+═══════════════════════════════════════════ */
+function renderDevices(list) {
+  document.getElementById('dev-tb').innerHTML = list.map(d => `
+    <tr>
+      <td><div class="dev-cell">
+        <div class="dev-ico ${d.type==='tablet'?'di-t':'di-a'}">${d.type==='tablet'?'<i class="ti ti-device-tablet"></i>':'<i class="ti ti-device-mobile"></i>'}</div>
+        <div><div class="dev-name">${d.name}</div><div class="dev-id">${d.id} · ${d.imei}</div></div>
+      </div></td>
+      <td><div style="font-size:13px;font-weight:500">${d.user}</div><div style="font-size:11px;color:var(--t3)">${d.loc}</div></td>
+      <td style="font-size:12px;color:var(--t2)">${d.os}</td>
+      <td><span class="badge b-${d.status}"><span class="bdot"></span>${cap(d.status)}</span></td>
+      <td style="font-size:12px;color:var(--t3)">${d.seen}</td>
+      <td>${bat(d.bat)}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="act-btn" onclick="toast('Detail: GET /api/devices/${d.id}')"><i class="ti ti-eye"></i></button>
+        <button class="act-btn" onclick="toast('Lock: POST /api/devices/${d.id}/lock')"><i class="ti ti-lock"></i></button>
+        <button class="act-btn dng" onclick="toast('Wipe: POST /api/devices/${d.id}/wipe — requires confirmation')"><i class="ti ti-trash"></i></button>
+      </div></td>
+    </tr>`).join('');
+}
+
+function filterDev() {
+  const q = document.getElementById('dev-search').value.toLowerCase();
+  const st = document.getElementById('dev-st').value;
+  const tp = document.getElementById('dev-tp').value;
+  renderDevices(DEVICES.filter(d =>
+    (!q || d.name.toLowerCase().includes(q) || d.user.toLowerCase().includes(q) || d.id.toLowerCase().includes(q)) &&
+    (!st || d.status === st) && (!tp || d.type === tp)
+  ));
+}
+
+/* ═══════════════════════════════════════════
+   LOGITRACKER
+═══════════════════════════════════════════ */
+
+
+function renderVehicles() {
+  document.getElementById('veh-list').innerHTML = VEHICLES.map(v => `
+    <div class="veh" id="vi-${v.id}" onclick="pickVehicle('${v.id}')">
+      <div class="vdot ${v.status==='moving'?'mv':'st'}"></div>
+      <div style="flex:1;min-width:0">
+        <div class="vn">${v.reg}</div>
+        <div class="vd">${v.driver} · ${v.route}</div>
+      </div>
+      <div class="vspd">${v.speed>0?v.speed+' km/h':'Parked'}</div>
+    </div>`).join('');
+}
+
+function initMap() {
+  if (MAP) return;
+  
+  setTimeout(() => {
+    try {
+      MAP = L.map('logi-map').setView([23.0225, 72.5714], 13); 
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(MAP);
+
+      database.ref('live_tracking').on('value', (snapshot) => {
+        const data = snapshot.val();
+        
+        // Remove markers from map if they were deleted from Firebase
+        const currentIds = data ? Object.keys(data) : [];
+        for (let mId in MARKERS) {
+          if (!currentIds.includes(mId)) {
+            MAP.removeLayer(MARKERS[mId]);
+            delete MARKERS[mId];
+          }
+        }
+
+        VEHICLES = {}; 
+        
+        if (!data) {
+            updateDashboardStats();
+            renderLiveVehiclesSidebar();
+            return;
+        }
+
+        const currentTime = Date.now();
+
+        for (const [vId, info] of Object.entries(data)) {
+            if (!info.location) continue;
+
+            const locData = info.location;
+            const lat = locData.lat;
+            const lng = locData.lng;
+            const speed = locData.speed || 0;
+            const lastUpdate = locData.time || currentTime;
+            
+            // LOGIC: If no update for 2 mins (120,000ms), mark as offline. Otherwise check speed.
+            const isOffline = (currentTime - lastUpdate) > 120000;
+            let currentStatus = 'offline';
+            if (!isOffline) {
+                currentStatus = speed > 2 ? 'moving' : 'stopped';
+            }
+
+            const driver = locData.driverName || "Unknown Driver";
+            const reg = locData.vehicleId || vId; 
+            const updateTimeStr = new Date(lastUpdate).toLocaleTimeString();
+
+            VEHICLES[vId] = {
+                id: vId,
+                reg: reg,
+                driver: driver,
+                status: currentStatus,
+                speed: speed,
+                lat: lat,
+                lng: lng,
+                update: updateTimeStr
+            };
+
+            // Marker Logic
+            if (MARKERS[vId]) {
+                MARKERS[vId].setLatLng([lat, lng]);
+                MARKERS[vId].getPopup().setContent(getPopupHTML(VEHICLES[vId]));
+                // Dim the marker slightly if the device goes offline
+                MARKERS[vId].setOpacity(currentStatus === 'offline' ? 0.6 : 1);
+            } else {
+                // Gray icon for offline, Blue for online
+                const iconColor = currentStatus === 'offline' ? '#9AA0A6' : '#1967D2';
+                const truckIcon = L.divIcon({
+                  html: `<div style="background:${iconColor};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 10px rgba(0,0,0,0.3);border:2px solid #fff;">🚛</div>`,
+                  className: '', iconSize: [36, 36]
+                });
+                
+                const m = L.marker([lat, lng], {icon: truckIcon}).addTo(MAP);
+                m.bindPopup(getPopupHTML(VEHICLES[vId]));
+                m.on('click', () => showMapInfo(VEHICLES[vId]));
+                MARKERS[vId] = m;
+            }
+        }
+        
+        updateDashboardStats();
+        renderLiveVehiclesSidebar();
+        
+      });
+    } catch(e) { console.error('Map Load Error:', e); }
+  }, 300);
+}
+
+function updateDashboardStats() {
+    const vList = Object.values(VEHICLES);
+    document.getElementById('stat-total').textContent = vList.length;
+    document.getElementById('stat-transit').textContent = vList.filter(v => v.status === 'moving').length;
+    document.getElementById('stat-parked').textContent = vList.filter(v => v.status === 'stopped').length;
+}
+
+// Helper to format the map popup
+function getPopupHTML(v) {
+    return `<div style="padding:5px">
+              <strong style="color:#1967D2">${v.reg}</strong><br>
+              Driver: <b>${v.driver}</b><br>
+              Speed: ${v.speed} km/h
+            </div>`;
+}
+
+function renderLiveVehiclesSidebar() {
+  const list = Object.values(VEHICLES);
+  const container = document.getElementById('veh-list');
+  
+  if (list.length === 0) {
+      container.innerHTML = `<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px;">No active vehicles tracking.</div>`;
+      return;
+  }
+
+  container.innerHTML = list.map(v => {
+    // Map internal status to UI colors/text
+    let statusText = "Offline (Lost Signal)";
+    let dotClass = "of";
+    
+    if (v.status === 'moving') {
+        statusText = "Online (Moving)";
+        dotClass = "mv";
+    } else if (v.status === 'stopped') {
+        statusText = "Parked / Idle";
+        dotClass = "st";
+    }
+
+    return `
+    <div class="veh" id="vi-${v.id}">
+      <div class="vdot ${dotClass}" onclick="pickVehicle('${v.id}')"></div>
+      <div style="flex:1;min-width:0" onclick="pickVehicle('${v.id}')">
+        <div class="vn">${v.reg}</div>
+        <div class="vd">${v.driver} <br><span style="font-size:10px;font-weight:600;opacity:0.8;">${statusText}</span></div>
+      </div>
+      <div style="text-align:right;">
+        <div class="vspd">${v.speed} km/h</div>
+        <button class="act-btn dng" style="padding:2px 6px; margin-top:6px;" onclick="removeVehicle('${v.id}', event)" title="Remove Vehicle">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Function to delete the vehicle directly from Firebase
+function removeVehicle(vehicleId, event) {
+    event.stopPropagation(); // Stops the row from being clicked when you hit the trash icon
+    
+    if(confirm("Are you sure you want to remove this vehicle from the live tracking board?")) {
+        database.ref('live_tracking').child(vehicleId).remove()
+        .then(() => {
+            toast('Vehicle removed successfully.');
+            // Map and list will auto-update because of the .on('value') listener
+        })
+        .catch(err => {
+            console.error(err);
+            toast('Error removing vehicle. Check database rules.');
+        });
+    }
+}
+
+
+function pickVehicle(id) {
+  const v = VEHICLES[id];
+  if (!v) return;
+  
+  document.querySelectorAll('.veh').forEach(e => e.classList.remove('sel'));
+  document.getElementById('vi-'+id).classList.add('sel');
+  
+  MAP.flyTo([v.lat, v.lng], 16);
+  MARKERS[id].openPopup();
+  showMapInfo(v);
+}
+
+function showMapInfo(v) {
+  document.getElementById('mi-name').textContent = v.reg;
+  document.getElementById('mi-speed').textContent = v.speed>0 ? v.speed+' km/h' : 'Parked';
+  document.getElementById('mi-driver').textContent = v.driver;
+  document.getElementById('mi-time').textContent = v.update;
+  document.getElementById('map-info').classList.add('on');
+}
+
+/* ═══════════════════════════════════════════
+   ALERTS
+═══════════════════════════════════════════ */
+let alertFil = 'all';
+
+function renderAlerts(filter) {
+  alertFil = filter;
+  const list = filter==='all' ? ALERTS : ALERTS.filter(a=>a.type===filter);
+  document.getElementById('alerts-list').innerHTML = list.map(a => `
+    <div class="al-item" id="al-${a.id}" style="${a.resolved?'opacity:.45':''}">
+      <div class="al-ico al-i${a.type[0]}"><i class="ti ${a.ico}"></i></div>
+      <div style="flex:1">
+        <div class="al-title">${a.title}</div>
+        <div class="al-desc">${a.desc}</div>
+        <div class="al-meta">
+          <span class="al-time"><i class="ti ti-clock" style="font-size:11px;vertical-align:middle"></i> ${a.time}</span>
+          <span class="al-src"><i class="ti ti-device-mobile" style="font-size:11px;vertical-align:middle"></i> ${a.src}</span>
+          ${a.resolved?'<span style="font-size:11px;color:var(--success);font-weight:600">✓ Resolved</span>':''}
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+        ${!a.resolved?`<button class="act-btn" onclick="resolveAlert(${a.id})"><i class="ti ti-check"></i> Resolve</button>`:''}
+        <button class="act-btn"><i class="ti ti-external-link"></i></button>
+      </div>
+    </div>`).join('');
+}
+
+function filAlert(el, filter) {
+  document.querySelectorAll('.fil').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderAlerts(filter);
+}
+
+function resolveAlert(id) {
+  // TODO: POST /api/alerts/${id}/resolve
+  const a = ALERTS.find(x=>x.id===id);
+  if (a) { a.resolved = true; renderAlerts(alertFil); updateAlertCounts(); toast(`Alert #${id} resolved`); renderOvAlerts(); }
+}
+
+function resolveAll() {
+  // TODO: POST /api/alerts/resolve-all
+  ALERTS.forEach(a => a.resolved=true);
+  renderAlerts(alertFil);
+  updateAlertCounts();
+  renderOvAlerts();
+  toast('All alerts resolved');
+}
+
+function updateAlertCounts() {
+  const un = ALERTS.filter(a=>!a.resolved);
+  document.getElementById('nb-alert').textContent = un.length;
+  document.getElementById('cnt-c').textContent = un.filter(a=>a.type==='critical').length;
+  document.getElementById('cnt-w').textContent = un.filter(a=>a.type==='warning').length;
+  document.getElementById('cnt-i').textContent = un.filter(a=>a.type==='info').length;
+  document.getElementById('cnt-r').textContent = ALERTS.filter(a=>a.resolved).length;
+}
+
+/* ═══════════════════════════════════════════
+   REPORTS
+═══════════════════════════════════════════ */
+const RC = {b:['var(--primary-l)','var(--primary)'],g:['var(--success-l)','var(--success)'],p:['var(--purple-l)','var(--purple)'],y:['var(--warn-l)','#9A6700'],t:['var(--teal-l)','var(--teal)'],r:['var(--danger-l)','var(--danger)']};
+
+function renderReports() {
+  document.getElementById('reports-grid').innerHTML = REPORTS.map(r => `
+    <div class="rc">
+      <div class="r-ico" style="background:${RC[r.c][0]};color:${RC[r.c][1]}"><i class="ti ${r.ico}"></i></div>
+      <div class="r-name">${r.name}</div>
+      <div class="r-desc">${r.desc}</div>
+      <div class="r-meta"><i class="ti ti-clock" style="font-size:11px;vertical-align:middle"></i> Last: ${r.last}</div>
+      <div class="r-acts">
+        <button class="btn-sec" style="font-size:12px;padding:6px 10px" onclick="toast('Generating ${r.name}… GET /api/reports/${r.name.toLowerCase().replace(/ /g,'-')}')"><i class="ti ti-refresh"></i> Generate</button>
+        <button class="btn-sec" style="font-size:12px;padding:6px 10px" onclick="toast('Downloading ${r.name}.${r.type}')"><i class="ti ti-download"></i> ${r.type}</button>
+      </div>
+    </div>`).join('');
+}
+
+/* ═══════════════════════════════════════════
+   ADMIN
+═══════════════════════════════════════════ */
+function renderAdmins() {
+  document.getElementById('admin-tb').innerHTML = ADMINS.map(a => `
+    <tr>
+      <td><div style="display:flex;align-items:center;gap:9px">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--primary-l);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--primary)">${a.av}</div>
+        <div style="font-size:13px;font-weight:500">${a.name}</div>
+      </div></td>
+      <td style="font-size:12px;color:var(--t2)">${a.email}</td>
+      <td><span class="badge b-${a.role}">${cap(a.role)}</span></td>
+      <td><span class="badge b-${a.status}">
+        <span class="bdot" style="background:${a.status==='active'?'var(--success)':'var(--t3)'}"></span>${cap(a.status)}</span></td>
+      <td style="font-size:12px;color:var(--t3)">${a.login}</td>
+      <td><span style="font-size:12px;font-weight:600;color:${a.twofa?'var(--success)':'var(--t3)'}">${a.twofa?'✓ Enabled':'— Off'}</span></td>
+      <td><div style="display:flex;gap:4px">
+        <button class="act-btn" onclick="toast('Edit ${a.name}: PUT /api/admins/${a.id}')"><i class="ti ti-edit"></i></button>
+        ${a.id!==1?`<button class="act-btn dng" onclick="toast('Delete ${a.name}: DELETE /api/admins/${a.id}')"><i class="ti ti-trash"></i></button>`:''}
+      </div></td>
+    </tr>`).join('');
+}
+
+/* ═══════════════════════════════════════════
+   SETTINGS
+═══════════════════════════════════════════ */
+function setTab(el, p) {
+  document.querySelectorAll('.set-ni').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.set-pn').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('stp-'+p).classList.add('active');
+}
+
+function renderApiKeys() {
+  document.getElementById('api-keys-list').innerHTML = API_KEYS.map(k => `
+    <div class="api-row">
+      <div style="flex:1">
+        <div class="api-n">${k.name}</div>
+        <div class="api-k">${k.key.substring(0,22)}••••••</div>
+        <div class="api-scope">Created ${k.created} · Scope: ${k.scope}</div>
+      </div>
+      <button class="act-btn" onclick="toast('Key copied — integrate as Authorization: Bearer header')"><i class="ti ti-copy"></i></button>
+      <button class="act-btn dng" onclick="toast('Revoke key: DELETE /api/keys/${k.key.split('_').pop()}')"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+function renderIntegrations() {
+  document.getElementById('int-list').innerHTML = INTEGRATIONS.map(i => `
+    <div class="int-row">
+      <div class="int-ico"><i class="ti ${i.ico}"></i></div>
+      <div style="flex:1">
+        <div style="font-size:13.5px;font-weight:500;color:var(--t1)">${i.name}</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:1px">${i.desc}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${i.ok?'<span style="font-size:11px;font-weight:600;color:var(--success);display:flex;align-items:center;gap:3px"><i class="ti ti-circle-check"></i> Connected</span>':''}
+        <button class="${i.ok?'act-btn':'btn-acc'}" style="${i.ok?'':'font-size:12px;padding:6px 12px'}" onclick="toast('${i.ok?'Configure':'Connect'}: ${i.name}')">
+          <i class="ti ${i.ok?'ti-settings':'ti-plug'}"></i> ${i.ok?'Configure':'Connect'}
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+/* ═══════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════ */
+function bat(v) {
+  const c = v<20?'l':v<40?'w':'';
+  const clr = v<20?'var(--danger)':v<40?'var(--warn)':'var(--t3)';
+  return `<div style="display:flex;align-items:center;gap:5px"><div class="bat-bar"><div class="bat-fill ${c}" style="width:${v}%"></div></div><span style="font-size:11px;color:${clr};font-weight:500">${v}%</span></div>`;
+}
+
+function cap(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+
+let _tt;
+function toast(msg) {
+  const el = document.getElementById('toast-el');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => el.classList.remove('on'), 3200);
+}
+</script>
 </body>
 </html>
