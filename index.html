@@ -283,8 +283,8 @@ select.sf{padding:8px 11px;border:1px solid var(--border);border-radius:var(--r)
   <div class="topbar">
     <div class="topbar-title" id="topbar-title">Dashboard Overview</div>
     <div class="top-search">
-      <i class="ti ti-search"></i>
-      <input type="text" placeholder="Search devices, vehicles, alerts…">
+        <i class="ti ti-search"></i>
+        <input type="text" id="fleet-search" placeholder="Search by Driver, Plate, or ID..." oninput="searchFleet()">
     </div>
     <div style="display:flex;align-items:center;gap:2px">
       <button class="icon-btn" onclick="toast('3 unresolved alerts — check Alerts module')"><i class="ti ti-bell"></i><span class="ndot"></span></button>
@@ -401,10 +401,10 @@ select.sf{padding:8px 11px;border:1px solid var(--border);border-radius:var(--r)
             <i class="ti ti-navigation" style="color:var(--success)"></i>
             <div><div class="logi-sv" id="stat-transit">0</div><div class="logi-sl">In Transit</div></div>
           </div>
-          <div class="logi-s">
+          <div class="logi-s" style="cursor:pointer" onclick="showParkingHistory()">
             <i class="ti ti-parking" style="color:var(--warn)"></i>
-            <div><div class="logi-sv" id="stat-parked">0</div><div class="logi-sl">Parked</div></div>
-          </div>
+            <div><div class="logi-sv" id="stat-parked">0</div><div class="logi-sl">Parked (Click for History)</div></div>
+            </div>
           <!-- Replaced 'km Today' with 'History' -->
           <div class="logi-s" style="cursor:pointer; border-color:var(--purple);" onclick="toast('History view coming soon! Will fetch past routes from database.')">
             <i class="ti ti-history" style="color:var(--purple)"></i>
@@ -581,6 +581,9 @@ select.sf{padding:8px 11px;border:1px solid var(--border);border-radius:var(--r)
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 <script>
+
+let SELECTED_VEHICLE_ID = null;
+let PARKING_HISTORY = {};
 /* ═══════════════════════════════════════════════════════
    MOCK DATA — Replace each section with real API calls
    See TODO comments for backend endpoint suggestions
@@ -830,97 +833,293 @@ function renderVehicles() {
       <div class="vspd">${v.speed>0?v.speed+' km/h':'Parked'}</div>
     </div>`).join('');
 }
-
+let STAY_TRACKER = {};
 function initMap() {
-  if (MAP) return;
-  
-  setTimeout(() => {
-    try {
-      MAP = L.map('logi-map').setView([23.0225, 72.5714], 13); 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-      }).addTo(MAP);
+    if (MAP) return;
+    
+    setTimeout(() => {
+        try {
+            // 1. Define Tile Layers
+            const googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                attribution: '&copy; Google Maps'
+            });
 
-      database.ref('live_tracking').on('value', (snapshot) => {
-        const data = snapshot.val();
-        
-        // Remove markers from map if they were deleted from Firebase
-        const currentIds = data ? Object.keys(data) : [];
-        for (let mId in MARKERS) {
-          if (!currentIds.includes(mId)) {
-            MAP.removeLayer(MARKERS[mId]);
-            delete MARKERS[mId];
-          }
-        }
+            const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            });
 
-        VEHICLES = {}; 
-        
-        if (!data) {
-            updateDashboardStats();
-            renderLiveVehiclesSidebar();
-            return;
-        }
+            // 2. Initialize the Map (Default to Satellite Hybrid)
+            MAP = L.map('logi-map', {
+                center: [18.7513, 73.3444], 
+                zoom: 13,
+                layers: [googleHybrid] 
+            });
 
-        const currentTime = Date.now();
-
-        for (const [vId, info] of Object.entries(data)) {
-            if (!info.location) continue;
-
-            const locData = info.location;
-            const lat = locData.lat;
-            const lng = locData.lng;
-            const speed = locData.speed || 0;
-            const lastUpdate = locData.time || currentTime;
-            
-            // LOGIC: If no update for 2 mins (120,000ms), mark as offline. Otherwise check speed.
-            const isOffline = (currentTime - lastUpdate) > 120000;
-            let currentStatus = 'offline';
-            if (!isOffline) {
-                currentStatus = speed > 2 ? 'moving' : 'stopped';
-            }
-
-            const driver = locData.driverName || "Unknown Driver";
-            const reg = locData.vehicleId || vId; 
-            const updateTimeStr = new Date(lastUpdate).toLocaleTimeString();
-
-            VEHICLES[vId] = {
-                id: vId,
-                reg: reg,
-                driver: driver,
-                status: currentStatus,
-                speed: speed,
-                lat: lat,
-                lng: lng,
-                update: updateTimeStr
+            // 3. Add Layer Switcher UI
+            const baseMaps = {
+                "Satellite View": googleHybrid,
+                "Standard View": osm
             };
+            L.control.layers(baseMaps).addTo(MAP);
 
-            // Marker Logic
-            if (MARKERS[vId]) {
-                MARKERS[vId].setLatLng([lat, lng]);
-                MARKERS[vId].getPopup().setContent(getPopupHTML(VEHICLES[vId]));
-                // Dim the marker slightly if the device goes offline
-                MARKERS[vId].setOpacity(currentStatus === 'offline' ? 0.6 : 1);
-            } else {
-                // Gray icon for offline, Blue for online
-                const iconColor = currentStatus === 'offline' ? '#9AA0A6' : '#1967D2';
-                const truckIcon = L.divIcon({
-                  html: `<div style="background:${iconColor};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 10px rgba(0,0,0,0.3);border:2px solid #fff;">🚛</div>`,
-                  className: '', iconSize: [36, 36]
-                });
+            // 4. ACTIVE COMMUNICATION (Firebase Live Stream)
+            database.ref('live_tracking').on('value', (snapshot) => {
+                const data = snapshot.val();
                 
-                const m = L.marker([lat, lng], {icon: truckIcon}).addTo(MAP);
-                m.bindPopup(getPopupHTML(VEHICLES[vId]));
-                m.on('click', () => showMapInfo(VEHICLES[vId]));
-                MARKERS[vId] = m;
-            }
+                // Cleanup removed markers
+                const currentIds = data ? Object.keys(data) : [];
+                for (let mId in MARKERS) {
+                    if (!currentIds.includes(mId)) {
+                        MAP.removeLayer(MARKERS[mId]);
+                        delete MARKERS[mId];
+                        delete STAY_TRACKER[mId];
+                    }
+                }
+
+                // FIX: Keep VEHICLES as an ARRAY so .map and .filter work
+                let vehiclesArray = []; 
+                if (!data) {
+                    VEHICLES = [];
+                    updateDashboardStats();
+                    renderLiveVehiclesSidebar();
+                    return;
+                }
+
+                const currentTime = Date.now();
+
+                for (const [vId, info] of Object.entries(data)) {
+                    if (!info.location) continue;
+
+                    const locData = info.location;
+                    const lat = locData.lat;
+                    const lng = locData.lng;
+                    const speed = locData.speed || 0;
+                    const lastUpdate = locData.time || currentTime;
+                    const reg = locData.vehicleId || vId;
+                    const driver = locData.driverName || "Unknown Driver";
+
+                    // --- STATIONARY MONITORING LOGIC ---
+                    processStationaryLogic(vId, lat, lng, currentTime, reg);
+                    
+                    // Determine Live Status
+                    const isOffline = (currentTime - lastUpdate) > 120000;
+                    let currentStatus = 'offline';
+                    if (!isOffline) {
+                        currentStatus = speed > 2 ? 'moving' : 'stopped';
+                    }
+
+                    // Push to the array for rendering
+                    vehiclesArray.push({
+                        id: vId,
+                        reg: reg,
+                        driver: driver,
+                        status: currentStatus,
+                        speed: speed,
+                        lat: lat,
+                        lng: lng,
+                        update: new Date(lastUpdate).toLocaleTimeString()
+                    });
+
+                    // Update or Create Map Marker
+                    if (MARKERS[vId]) {
+                        MARKERS[vId].setLatLng([lat, lng]);
+                        MARKERS[vId].getPopup().setContent(getPopupHTML(vehiclesArray[vehiclesArray.length-1]));
+                        MARKERS[vId].setOpacity(currentStatus === 'offline' ? 0.6 : 1);
+                    } else {
+                        const iconColor = currentStatus === 'offline' ? '#9AA0A6' : '#1967D2';
+                        const truckIcon = L.divIcon({
+                            html: `<div style="background:${iconColor};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 10px rgba(0,0,0,0.3);border:2px solid #fff;">🚛</div>`,
+                            className: '', iconSize: [36, 36]
+                        });
+                        
+                        const m = L.marker([lat, lng], {icon: truckIcon}).addTo(MAP);
+                        m.bindPopup(getPopupHTML(vehiclesArray[vehiclesArray.length-1]));
+                        m.on('click', () => showMapInfo(vehiclesArray[vehiclesArray.length-1]));
+                        MARKERS[vId] = m;
+                    }
+                }
+                
+                // Update Global Variable and UI
+                VEHICLES = vehiclesArray;
+                updateDashboardStats();
+                renderLiveVehiclesSidebar();
+            });
+        } catch(e) { console.error('Map Load Error:', e); }
+    }, 300);
+}
+
+function processStationaryLogic(vId, lat, lng, now, reg) {
+    if (!STAY_TRACKER[vId]) {
+        STAY_TRACKER[vId] = { anchorLat: lat, anchorLng: lng, startTime: now, alerted: false };
+        return;
+    }
+
+    const tracker = STAY_TRACKER[vId];
+    const dist = getDistance(lat, lng, tracker.anchorLat, tracker.anchorLng);
+
+    if (dist > 500) {
+        // VEHICLE MOVED: If they were stopped for a significant time (> 5 mins), record it
+        const durationMs = now - tracker.startTime;
+        if (durationMs > 300000) { // 5 minutes minimum to count as a "stop"
+            if (!PARKING_HISTORY[vId]) PARKING_HISTORY[vId] = [];
+            PARKING_HISTORY[vId].push({
+                start: tracker.startTime,
+                end: now,
+                duration: durationMs
+            });
         }
         
-        updateDashboardStats();
-        renderLiveVehiclesSidebar();
-        
-      });
-    } catch(e) { console.error('Map Load Error:', e); }
-  }, 300);
+        // Reset tracker
+        STAY_TRACKER[vId] = { anchorLat: lat, anchorLng: lng, startTime: now, alerted: false };
+        const row = document.getElementById('vi-' + vId);
+        if(row) row.style.borderLeft = "none";
+    } else {
+        // Still parked... (Keep your existing 12hr alert logic here)
+        const hoursStayed = (now - tracker.startTime) / 3600000;
+        if (hoursStayed >= 12 && !tracker.alerted) {
+            STAY_TRACKER[vId].alerted = true;
+            executeParkingAlert(vId, reg, hoursStayed);
+        }
+    }
+}
+
+function searchFleet() {
+    const q = document.getElementById('fleet-search').value.toLowerCase();
+    const filtered = VEHICLES.filter(v => 
+        v.reg.toLowerCase().includes(q) || 
+        v.driver.toLowerCase().includes(q) || 
+        v.id.toLowerCase().includes(q)
+    );
+    renderFilteredSidebar(filtered);
+}
+
+function renderFilteredSidebar(list) {
+    const container = document.getElementById('veh-list');
+    container.innerHTML = list.map(v => {
+        let dotClass = v.status === 'moving' ? 'mv' : (v.status === 'stopped' ? 'st' : 'of');
+        return `
+        <div class="veh ${SELECTED_VEHICLE_ID === v.id ? 'sel' : ''}" id="vi-${v.id}" onclick="pickVehicle('${v.id}')">
+          <div class="vdot ${dotClass}"></div>
+          <div style="flex:1;min-width:0">
+            <div class="vn">${v.reg}</div>
+            <div class="vd">${v.driver}</div>
+          </div>
+          <div class="vspd">${v.speed} km/h</div>
+        </div>`;
+    }).join('');
+}
+
+// Function to show Parking History when the card is clicked
+function showParkingHistory() {
+    if (!SELECTED_VEHICLE_ID) {
+        toast("Please select a vehicle from the list first.");
+        return;
+    }
+
+    const v = VEHICLES.find(x => x.id === SELECTED_VEHICLE_ID);
+    const history = PARKING_HISTORY[SELECTED_VEHICLE_ID] || [];
+    
+    // Current ongoing stop
+    const currentStopMs = Date.now() - STAY_TRACKER[SELECTED_VEHICLE_ID].startTime;
+    const currentStopHrs = (currentStopMs / 3600000).toFixed(1);
+
+    let historyHtml = `<b>History for ${v.reg}:</b><br>`;
+    historyHtml += `Current Stay: ${currentStopHrs} hrs<br><hr>`;
+    
+    if (history.length === 0) {
+        historyHtml += "No previous stops recorded this session.";
+    } else {
+        history.slice(-5).forEach((h, i) => {
+            const hTime = (h.duration / 3600000).toFixed(1);
+            historyHtml += `Stop #${i+1}: ${hTime} hrs (Ended ${new Date(h.end).toLocaleTimeString()})<br>`;
+        });
+    }
+
+    // You can show this in a Toast or a custom Modal
+    // Using toast for simplicity based on your current project
+    alert(historyHtml.replace(/<br>/g, '\n').replace(/<hr>/g, '---')); 
+}
+
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Meters
+    const dLat = (lat2-lat1) * Math.PI/180;
+    const dLon = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function executeParkingAlert(vId, reg, hours) {
+    toast(`🚨 ${reg} parked for ${hours.toFixed(1)}h!`);
+
+    ALERTS.unshift({
+        id: Date.now(),
+        type: 'critical',
+        ico: 'ti-parking',
+        title: 'Long-Stay Parking Alert',
+        desc: `Vehicle ${reg} has been stationary for ${hours.toFixed(1)} hours. Please check with the driver.`,
+        src: reg,
+        time: 'Just now',
+        resolved: false
+    });
+
+    const row = document.getElementById('vi-' + vId);
+    if(row) row.style.borderLeft = "4px solid var(--danger)";
+    
+    updateAlertCounts();
+    renderAlerts(alertFil);
+}
+
+function checkStationaryStatus(vId, lat, lng, now, reg) {
+    if (!STAY_TRACKER[vId]) {
+        // Initialize tracking for a new vehicle
+        STAY_TRACKER[vId] = { anchorLat: lat, anchorLng: lng, startTime: now, alerted: false };
+        return;
+    }
+
+    const tracker = STAY_TRACKER[vId];
+    const dist = getDistance(lat, lng, tracker.anchorLat, tracker.anchorLng);
+
+    // If moved more than 500 meters, reset the anchor
+    if (dist > 500) {
+        STAY_TRACKER[vId] = { anchorLat: lat, anchorLng: lng, startTime: now, alerted: false };
+    } else {
+        // Still in the same 500m zone. Calculate hours stayed.
+        const hoursStayed = (now - tracker.startTime) / (1000 * 60 * 60);
+
+        if (hoursStayed >= 12 && !tracker.alerted) {
+            triggerParkingAlert(vId, reg, hoursStayed);
+            STAY_TRACKER[vId].alerted = true; // Prevent duplicate alerts
+        }
+    }
+}
+
+function triggerParkingAlert(vId, reg, hours) {
+    const msg = `CRITICAL: Vehicle ${reg} parked for ${hours.toFixed(1)} hours at the same spot!`;
+    
+    // 1. Show Toast for Dashboard Viewer
+    toast(msg);
+
+    // 2. Add to your ALERTS array so it shows in the Alerts Module
+    ALERTS.unshift({
+        id: Date.now(),
+        type: 'critical',
+        ico: 'ti-parking',
+        title: 'Long Duration Parking Alert',
+        desc: `${reg} has been stationary within a 500m radius for over 12 hours. Potential delay or breakdown.`,
+        src: reg,
+        time: 'Just now',
+        resolved: false
+    });
+
+    // 3. Optional: Highlight the vehicle in the sidebar
+    const row = document.getElementById('vi-' + vId);
+    if(row) row.style.borderLeft = "4px solid var(--danger)";
+    
+    updateAlertCounts();
+    renderAlerts(alertFil);
 }
 
 function updateDashboardStats() {
@@ -940,42 +1139,71 @@ function getPopupHTML(v) {
 }
 
 function renderLiveVehiclesSidebar() {
-  const list = Object.values(VEHICLES);
-  const container = document.getElementById('veh-list');
-  
-  if (list.length === 0) {
-      container.innerHTML = `<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px;">No active vehicles tracking.</div>`;
-      return;
-  }
-
-  container.innerHTML = list.map(v => {
-    // Map internal status to UI colors/text
-    let statusText = "Offline (Lost Signal)";
-    let dotClass = "of";
+    const container = document.getElementById('veh-list');
     
-    if (v.status === 'moving') {
-        statusText = "Online (Moving)";
-        dotClass = "mv";
-    } else if (v.status === 'stopped') {
-        statusText = "Parked / Idle";
-        dotClass = "st";
+    // FIX: VEHICLES is now an array again
+    if (!VEHICLES || VEHICLES.length === 0) {
+        container.innerHTML = `<div style="padding:16px;text-align:center;color:var(--t3);font-size:12px;">No active vehicles tracking.</div>`;
+        return;
     }
 
-    return `
-    <div class="veh" id="vi-${v.id}">
-      <div class="vdot ${dotClass}" onclick="pickVehicle('${v.id}')"></div>
-      <div style="flex:1;min-width:0" onclick="pickVehicle('${v.id}')">
-        <div class="vn">${v.reg}</div>
-        <div class="vd">${v.driver} <br><span style="font-size:10px;font-weight:600;opacity:0.8;">${statusText}</span></div>
-      </div>
-      <div style="text-align:right;">
-        <div class="vspd">${v.speed} km/h</div>
-        <button class="act-btn dng" style="padding:2px 6px; margin-top:6px;" onclick="removeVehicle('${v.id}', event)" title="Remove Vehicle">
-          <i class="ti ti-trash"></i>
-        </button>
-      </div>
-    </div>`;
-  }).join('');
+    container.innerHTML = VEHICLES.map(v => {
+        // Map internal status to UI colors/text
+        let statusText = "Offline (Lost Signal)";
+        let dotClass = "of";
+        
+        if (v.status === 'moving') {
+            statusText = "Online (Moving)";
+            dotClass = "mv";
+        } else if (v.status === 'stopped') {
+            statusText = "Parked / Idle";
+            dotClass = "st";
+        }
+
+        // --- NEW: STAY INFO CALCULATION ---
+        let stayInfo = "";
+        if (STAY_TRACKER[v.id]) {
+            const hours = (Date.now() - STAY_TRACKER[v.id].startTime) / 3600000;
+            // Show duration if they've been parked more than 10 minutes
+            if (hours > 0.1) {
+                stayInfo = `<div style="font-size:10px; color:var(--danger); font-weight:600; margin-top:2px;">
+                                <i class="ti ti-clock-pause"></i> Parked: ${hours.toFixed(1)}h
+                            </div>`;
+            }
+        }
+
+        return `
+        <div class="veh" id="vi-${v.id}">
+          <div class="vdot ${dotClass}" onclick="pickVehicle('${v.id}')"></div>
+          <div style="flex:1;min-width:0" onclick="pickVehicle('${v.id}')">
+            <div class="vn">${v.reg}</div>
+            <div class="vd">${v.driver} <br><span style="font-size:10px;font-weight:600;opacity:0.8;">${statusText}</span></div>
+            ${stayInfo}
+          </div>
+          <div style="text-align:right;">
+            <div class="vspd">${v.speed} km/h</div>
+            <button class="act-btn dng" style="padding:2px 6px; margin-top:6px;" onclick="removeVehicle('${v.id}', event)" title="Remove Vehicle">
+              <i class="ti ti-trash"></i>
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+}
+
+function pickVehicle(id) {
+    SELECTED_VEHICLE_ID = id; // Set the global selected ID
+    const v = VEHICLES.find(x => x.id === id);
+    if (!v) return;
+    
+    document.querySelectorAll('.veh').forEach(e => e.classList.remove('sel'));
+    const selectedRow = document.getElementById('vi-' + id);
+    if (selectedRow) selectedRow.classList.add('sel');
+    
+    if (MAP && MARKERS[id]) {
+        MAP.flyTo([v.lat, v.lng], 16);
+        MARKERS[id].openPopup();
+        showMapInfo(v);
+    }
 }
 
 // Function to delete the vehicle directly from Firebase
@@ -997,15 +1225,27 @@ function removeVehicle(vehicleId, event) {
 
 
 function pickVehicle(id) {
-  const v = VEHICLES[id];
-  if (!v) return;
-  
-  document.querySelectorAll('.veh').forEach(e => e.classList.remove('sel'));
-  document.getElementById('vi-'+id).classList.add('sel');
-  
-  MAP.flyTo([v.lat, v.lng], 16);
-  MARKERS[id].openPopup();
-  showMapInfo(v);
+    // Find the specific vehicle object in the global array
+    const v = VEHICLES.find(x => x.id === id);
+    if (!v) {
+        console.error("Vehicle not found in global list:", id);
+        return;
+    }
+    
+    // UI: Update active state in sidebar
+    document.querySelectorAll('.veh').forEach(e => e.classList.remove('sel'));
+    const selectedRow = document.getElementById('vi-' + id);
+    if (selectedRow) selectedRow.classList.add('sel');
+    
+    // MAP: Fly to location and open popup
+    if (MAP && MARKERS[id]) {
+        MAP.flyTo([v.lat, v.lng], 16, {
+            animate: true,
+            duration: 1.5
+        });
+        MARKERS[id].openPopup();
+        showMapInfo(v);
+    }
 }
 
 function showMapInfo(v) {
